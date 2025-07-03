@@ -4,7 +4,6 @@ import (
 	"database/sql"
 
 	"log"
-	"os"
 
 	_ "github.com/lib/pq"
 )
@@ -12,8 +11,12 @@ import (
 var DB *sql.DB
 
 func Connect() {
+
 	var err error
-	DB, err = sql.Open("postgres", os.Getenv("DB_URL"))
+	// DB, err = sql.Open("postgres", os.Getenv("DB_URL"))
+
+	DB, err = sql.Open("postgres", "postgres://postgres:password@localhost:5433/itami?sslmode=disable")
+
 	if err != nil {
 		log.Fatal("Failed to connect to DB:", err)
 	}
