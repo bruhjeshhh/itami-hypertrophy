@@ -27,6 +27,10 @@ func main() {
 		w.Write([]byte("Hello, " + email + "! This is your profile."))
 	}))
 
-	fmt.Println("Server starting on port 8080...")
+	http.HandleFunc("/log-calories", handler.JWTMiddleware(handler.LogCalories))
+	http.HandleFunc("/meals", handler.JWTMiddleware(handler.GetMeals))
+	http.HandleFunc("/meals/today", handler.JWTMiddleware(handler.GetTodayMeals))
+
+	fmt.Println("runnin on 8080")
 	http.ListenAndServe(":8080", nil)
 }
