@@ -16,6 +16,11 @@ type creds struct {
 	Password string `json:"password"`
 }
 
+func UserEmailKey() interface{} {
+	return userEmailKey
+}
+
+// always remember boht maa chudi thi idhar
 func Register(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Only POST allowed", http.StatusMethodNotAllowed)
@@ -72,7 +77,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ✅ JWT generation — this part is fine
+	// jwt —okokmaybe
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"email": c.Email,
 		"exp":   time.Now().Add(24 * time.Hour).Unix(),
@@ -94,4 +99,5 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"token": tokenString,
 	})
+
 }
