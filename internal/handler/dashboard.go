@@ -136,3 +136,81 @@ func GetDashboardByDate(w http.ResponseWriter, r *http.Request) {
 		"summary":  summary,
 	})
 }
+
+// weekly tracking
+func GetWeeklyDashboard(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Only GET allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	email := r.Context().Value(UserEmailKey()).(string)
+
+	startStr := r.URL.Query().Get("start") // expects YYYY-MM-DD
+	var weekStart time.Time
+	var err error
+
+	if startStr == "" {
+		today := time.Now()
+		offset := (int(today.Weekday()) + 6) % 7 // Monday = 0
+		weekStart = today.AddDate(0, 0, -offset)
+	} else {
+		weekStart, err = time.Parse("2006-01-02", startStr)
+		if err != nil {
+			http.Error(w, "Invalid date format. Use YYYY-MM-DD", http.StatusBadRequest)
+			return
+		}
+	}
+
+	days := []string{}
+	calories := []float64{}
+	protein := []float64{}
+	volume := []float64{}
+
+	for i := 0; i < 7; i++ {
+		dayStart := weekStart.AddDate(0, 0, i)
+		dayEnd := dayStart.Add(24 * time.Hour)
+		dateStr := dayStart.Format("2006-01-02")
+		days = append(days, dateStr)
+
+		var cal, prot float64
+		err := db.DB.QueryRow(`
+			SELECT COALESCE(SUM(calories),0), COALESCE(SUM(protein),0)
+			FROM meals
+			WHERE email = $1 AND created_at >= $2 AND created_at < $3
+		`, email, dayStart, dayEnd).Scan(&cal, &prot)
+		if err != nil {
+			http.Error(w, "DB error (meals): "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		rows, err := db.DB.Query(`
+			SELECT sets, reps, weight FROM strength_workouts
+			WHERE email = $1 AND created_at >= $2 AND created_at < $3
+		`, email, dayStart, dayEnd)
+		if err != nil {
+			http.Error(w, "DB error (workouts): "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		var vol float64
+		for rows.Next() {
+			var sets, reps int
+			var weight float64
+			rows.Scan(&sets, &reps, &weight)
+			vol += float64(sets*reps) * weight
+		}
+		rows.Close()
+
+		calories = append(calories, cal)
+		protein = append(protein, prot)
+		volume = append(volume, vol)
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"days":     days,
+		"calories": calories,
+		"protein":  protein,
+		"volume":   volume,
+	})
+}

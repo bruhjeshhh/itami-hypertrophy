@@ -32,6 +32,7 @@ func main() {
 	http.HandleFunc("/meals/today", handler.JWTMiddleware(handler.GetTodayMeals))
 	http.HandleFunc("/log-strength", handler.JWTMiddleware(handler.LogStrengthWorkout))
 	http.HandleFunc("/dashboard", handler.JWTMiddleware(handler.GetDashboardByDate))
+	http.HandleFunc("/dashboard/weekly", handler.JWTMiddleware(handler.GetWeeklyDashboard))
 
 	fmt.Println("runnin on 8080")
 	http.ListenAndServe(":8080", nil)
