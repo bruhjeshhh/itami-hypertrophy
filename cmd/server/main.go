@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 
+	"itami-hypertrophy/internal/cache"
 	"itami-hypertrophy/internal/db"
 	"itami-hypertrophy/internal/handler"
 
@@ -35,6 +36,7 @@ func main() {
 	http.HandleFunc("/dashboard/weekly", handler.JWTMiddleware(handler.GetWeeklyDashboard))
 	http.HandleFunc("/goals", handler.JWTMiddleware(handler.GetGoals))
 	http.HandleFunc("/goals/set", handler.JWTMiddleware(handler.SetGoals))
+	cache.InitRedis()
 
 	fmt.Println("runnin on 8080")
 	http.ListenAndServe(":8080", nil)
