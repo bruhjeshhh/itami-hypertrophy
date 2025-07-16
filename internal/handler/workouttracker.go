@@ -38,7 +38,7 @@ func LogStrengthWorkout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	son.NewEncoder(w).Encode(map[string]string{
+	json.NewEncoder(w).Encode(map[string]string{
 		"message": "Workout logged successfully",
 	})
 }
