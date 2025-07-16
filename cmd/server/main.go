@@ -33,6 +33,8 @@ func main() {
 	http.HandleFunc("/log-strength", handler.JWTMiddleware(handler.LogStrengthWorkout))
 	http.HandleFunc("/dashboard", handler.JWTMiddleware(handler.GetDashboardByDate))
 	http.HandleFunc("/dashboard/weekly", handler.JWTMiddleware(handler.GetWeeklyDashboard))
+	http.HandleFunc("/goals", handler.JWTMiddleware(handler.GetGoals))
+	http.HandleFunc("/goals/set", handler.JWTMiddleware(handler.SetGoals))
 
 	fmt.Println("runnin on 8080")
 	http.ListenAndServe(":8080", nil)

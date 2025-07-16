@@ -146,13 +146,14 @@ func GetWeeklyDashboard(w http.ResponseWriter, r *http.Request) {
 
 	email := r.Context().Value(UserEmailKey()).(string)
 
-	startStr := r.URL.Query().Get("start") // expects YYYY-MM-DD
+	// Determine week start (Monday)
+	startStr := r.URL.Query().Get("start")
 	var weekStart time.Time
 	var err error
 
 	if startStr == "" {
 		today := time.Now()
-		offset := (int(today.Weekday()) + 6) % 7 // Monday = 0
+		offset := (int(today.Weekday()) + 6) % 7
 		weekStart = today.AddDate(0, 0, -offset)
 	} else {
 		weekStart, err = time.Parse("2006-01-02", startStr)
@@ -162,10 +163,15 @@ func GetWeeklyDashboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Day-wise values
 	days := []string{}
 	calories := []float64{}
 	protein := []float64{}
 	volume := []float64{}
+
+	var weeklyCalories float64
+	var weeklyProtein float64
+	var weeklyVolume float64
 
 	for i := 0; i < 7; i++ {
 		dayStart := weekStart.AddDate(0, 0, i)
@@ -202,15 +208,71 @@ func GetWeeklyDashboard(w http.ResponseWriter, r *http.Request) {
 		}
 		rows.Close()
 
+		// Add to arrays
 		calories = append(calories, cal)
 		protein = append(protein, prot)
 		volume = append(volume, vol)
+
+		// Add to weekly totals
+		weeklyCalories += cal
+		weeklyProtein += prot
+		weeklyVolume += vol
 	}
 
+	// Fetch goals
+	var dailyCaloriesGoal, dailyProteinGoal, weeklyVolumeGoal float64
+	err = db.DB.QueryRow(`
+		SELECT daily_calories_target, daily_protein_target, weekly_volume_target
+		FROM goals WHERE email = $1
+	`, email).Scan(&dailyCaloriesGoal, &dailyProteinGoal, &weeklyVolumeGoal)
+	if err != nil {
+		// No goals set, keep defaults as 0
+		dailyCaloriesGoal, dailyProteinGoal, weeklyVolumeGoal = 0, 0, 0
+	}
+
+	// Compute weekly goals (7 * daily)
+	weeklyCaloriesGoal := dailyCaloriesGoal * 7
+	weeklyProteinGoal := dailyProteinGoal * 7
+
+	// Compute % progress (avoid division by zero)
+	progressCalories := 0.0
+	if weeklyCaloriesGoal > 0 {
+		progressCalories = (weeklyCalories / weeklyCaloriesGoal) * 100
+	}
+
+	progressProtein := 0.0
+	if weeklyProteinGoal > 0 {
+		progressProtein = (weeklyProtein / weeklyProteinGoal) * 100
+	}
+
+	progressVolume := 0.0
+	if weeklyVolumeGoal > 0 {
+		progressVolume = (weeklyVolume / weeklyVolumeGoal) * 100
+	}
+
+	// Final JSON response
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"days":     days,
 		"calories": calories,
 		"protein":  protein,
 		"volume":   volume,
+
+		"weekly_totals": map[string]float64{
+			"calories": weeklyCalories,
+			"protein":  weeklyProtein,
+			"volume":   weeklyVolume,
+		},
+
+		"goals": map[string]float64{
+			"weekly_calories": weeklyCaloriesGoal,
+			"weekly_protein":  weeklyProteinGoal,
+			"weekly_volume":   weeklyVolumeGoal,
+		},
+
+		"progress_percent": map[string]float64{
+			"calories": progressCalories,
+			"protein":  progressProtein,
+			"volume":   progressVolume,
+		},
 	})
 }
