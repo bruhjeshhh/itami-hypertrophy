@@ -2,6 +2,8 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
+	"itami-hypertrophy/internal/cache"
 	"itami-hypertrophy/internal/db"
 	"net/http"
 	"time"
@@ -146,7 +148,7 @@ func GetWeeklyDashboard(w http.ResponseWriter, r *http.Request) {
 
 	email := r.Context().Value(UserEmailKey()).(string)
 
-	// Determine week start (Monday)
+	// Determine start of week (Monday)
 	startStr := r.URL.Query().Get("start")
 	var weekStart time.Time
 	var err error
@@ -163,7 +165,18 @@ func GetWeeklyDashboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Day-wise values
+	// ✅ Redis cache key for this user + week
+	cacheKey := fmt.Sprintf("weekly:%s:%s", email, weekStart.Format("2006-01-02"))
+
+	// 1️⃣ Try to fetch from Redis first
+	cached, _ := cache.Rdb.Get(cache.Ctx, cacheKey).Result()
+	if cached != "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(cached))
+		return
+	}
+
+	// No cache → compute fresh
 	days := []string{}
 	calories := []float64{}
 	protein := []float64{}
@@ -181,19 +194,19 @@ func GetWeeklyDashboard(w http.ResponseWriter, r *http.Request) {
 
 		var cal, prot float64
 		err := db.DB.QueryRow(`
-			SELECT COALESCE(SUM(calories),0), COALESCE(SUM(protein),0)
-			FROM meals
-			WHERE email = $1 AND created_at >= $2 AND created_at < $3
-		`, email, dayStart, dayEnd).Scan(&cal, &prot)
+            SELECT COALESCE(SUM(calories),0), COALESCE(SUM(protein),0)
+            FROM meals
+            WHERE email = $1 AND created_at >= $2 AND created_at < $3
+        `, email, dayStart, dayEnd).Scan(&cal, &prot)
 		if err != nil {
 			http.Error(w, "DB error (meals): "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 
 		rows, err := db.DB.Query(`
-			SELECT sets, reps, weight FROM strength_workouts
-			WHERE email = $1 AND created_at >= $2 AND created_at < $3
-		`, email, dayStart, dayEnd)
+            SELECT sets, reps, weight FROM strength_workouts
+            WHERE email = $1 AND created_at >= $2 AND created_at < $3
+        `, email, dayStart, dayEnd)
 		if err != nil {
 			http.Error(w, "DB error (workouts): "+err.Error(), http.StatusInternalServerError)
 			return
@@ -208,33 +221,30 @@ func GetWeeklyDashboard(w http.ResponseWriter, r *http.Request) {
 		}
 		rows.Close()
 
-		// Add to arrays
 		calories = append(calories, cal)
 		protein = append(protein, prot)
 		volume = append(volume, vol)
 
-		// Add to weekly totals
 		weeklyCalories += cal
 		weeklyProtein += prot
 		weeklyVolume += vol
 	}
 
-	// Fetch goals
+	// ✅ Fetch user goals
 	var dailyCaloriesGoal, dailyProteinGoal, weeklyVolumeGoal float64
 	err = db.DB.QueryRow(`
-		SELECT daily_calories_target, daily_protein_target, weekly_volume_target
-		FROM goals WHERE email = $1
-	`, email).Scan(&dailyCaloriesGoal, &dailyProteinGoal, &weeklyVolumeGoal)
+        SELECT daily_calories_target, daily_protein_target, weekly_volume_target
+        FROM goals WHERE email = $1
+    `, email).Scan(&dailyCaloriesGoal, &dailyProteinGoal, &weeklyVolumeGoal)
 	if err != nil {
-		// No goals set, keep defaults as 0
 		dailyCaloriesGoal, dailyProteinGoal, weeklyVolumeGoal = 0, 0, 0
 	}
 
-	// Compute weekly goals (7 * daily)
+	// Compute weekly goals
 	weeklyCaloriesGoal := dailyCaloriesGoal * 7
 	weeklyProteinGoal := dailyProteinGoal * 7
 
-	// Compute % progress (avoid division by zero)
+	// Compute % progress
 	progressCalories := 0.0
 	if weeklyCaloriesGoal > 0 {
 		progressCalories = (weeklyCalories / weeklyCaloriesGoal) * 100
@@ -250,29 +260,34 @@ func GetWeeklyDashboard(w http.ResponseWriter, r *http.Request) {
 		progressVolume = (weeklyVolume / weeklyVolumeGoal) * 100
 	}
 
-	// Final JSON response
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	// ✅ Final JSON response
+	response := map[string]interface{}{
 		"days":     days,
 		"calories": calories,
 		"protein":  protein,
 		"volume":   volume,
-
 		"weekly_totals": map[string]float64{
 			"calories": weeklyCalories,
 			"protein":  weeklyProtein,
 			"volume":   weeklyVolume,
 		},
-
 		"goals": map[string]float64{
 			"weekly_calories": weeklyCaloriesGoal,
 			"weekly_protein":  weeklyProteinGoal,
 			"weekly_volume":   weeklyVolumeGoal,
 		},
-
 		"progress_percent": map[string]float64{
 			"calories": progressCalories,
 			"protein":  progressProtein,
 			"volume":   progressVolume,
 		},
-	})
+	}
+
+	// ✅ Cache this response in Redis for 5 min
+	jsonBytes, _ := json.Marshal(response)
+	cache.Rdb.Set(cache.Ctx, cacheKey, jsonBytes, 5*time.Minute)
+
+	// ✅ Send to client
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsonBytes)
 }
