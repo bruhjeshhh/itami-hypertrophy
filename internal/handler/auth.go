@@ -16,10 +16,6 @@ type creds struct {
 	Password string `json:"password"`
 }
 
-// func UserEmailKey interface{} {
-// 	return userEmailKey
-// }
-
 // always remember boht maa chudi thi idhar
 func Register(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {

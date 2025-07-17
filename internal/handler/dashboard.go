@@ -290,4 +290,5 @@ func GetWeeklyDashboard(w http.ResponseWriter, r *http.Request) {
 	// ✅ Send to client
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(jsonBytes)
+
 }
