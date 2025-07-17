@@ -7,11 +7,12 @@ import (
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
-) //jwt ka code hai
+)
 
 type contextKey string
 
-const userEmailKey contextKey = "userEmail"
+// ✅ Only ONE declaration
+var UserEmailKey contextKey = "userEmail"
 
 func JWTMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -21,25 +22,44 @@ func JWTMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 		secret := os.Getenv("JWT_SECRET")
+		if secret == "" {
+			http.Error(w, "Server misconfigured: missing JWT secret", http.StatusInternalServerError)
+			return
+		}
 
-		token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
+		token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
+			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, jwt.ErrSignatureInvalid
+			}
 			return []byte(secret), nil
 		})
 		if err != nil || !token.Valid {
-			http.Error(w, "Invalid token", http.StatusUnauthorized)
+			http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
 			return
 		}
 
-		claims := token.Claims.(jwt.MapClaims)
-		email, ok := claims["email"].(string)
+		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok {
-			http.Error(w, "Invalid token payload", http.StatusUnauthorized)
+			http.Error(w, "Invalid token claims", http.StatusUnauthorized)
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), userEmailKey, email)
-		next.ServeHTTP(w, r.WithContext(ctx))
+		email, _ := claims["email"].(string)
+		if email == "" {
+			http.Error(w, "Missing email in token", http.StatusUnauthorized)
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), UserEmailKey, email)
+		next(w, r.WithContext(ctx))
 	}
+}
+
+func GetUserEmail(r *http.Request) string {
+	if email, ok := r.Context().Value(UserEmailKey).(string); ok {
+		return email
+	}
+	return ""
 }

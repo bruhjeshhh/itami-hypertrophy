@@ -19,7 +19,7 @@ func LogStrengthWorkout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	email := r.Context().Value(UserEmailKey()).(string)
+	email := r.Context().Value(UserEmailKey).(string)
 
 	var req StrengthWorkoutRequest
 	err := json.NewDecoder(r.Body).Decode(&req)

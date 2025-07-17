@@ -14,17 +14,26 @@ import (
 
 func main() {
 	godotenv.Load()
+
 	fmt.Println("Using DB_URL:", os.Getenv("DB_URL"))
+
+	// ✅ Call your existing DB connector
 	db.Connect()
 
+	// ✅ Init Redis before routes
+	cache.InitRedis()
+	fmt.Println("Connected to Redis")
+
+	// ✅ Public routes
 	http.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "pong")
 	})
-
 	http.HandleFunc("/register", handler.Register)
 	http.HandleFunc("/login", handler.Login)
+
+	// ✅ Authenticated routes
 	http.HandleFunc("/profile", handler.JWTMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		email := r.Context().Value(handler.UserEmailKey()).(string)
+		email := r.Context().Value(handler.UserEmailKey).(string)
 		w.Write([]byte("Hello, " + email + "! This is your profile."))
 	}))
 
@@ -36,9 +45,7 @@ func main() {
 	http.HandleFunc("/dashboard/weekly", handler.JWTMiddleware(handler.GetWeeklyDashboard))
 	http.HandleFunc("/goals", handler.JWTMiddleware(handler.GetGoals))
 	http.HandleFunc("/goals/set", handler.JWTMiddleware(handler.SetGoals))
-	cache.InitRedis()
 
-	fmt.Println("runnin on 8080")
+	fmt.Println("Server running on :8080")
 	http.ListenAndServe(":8080", nil)
-
 }

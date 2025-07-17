@@ -16,7 +16,7 @@ func GetDashboardByDate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	email := r.Context().Value(UserEmailKey()).(string)
+	email := r.Context().Value(UserEmailKey).(string)
 
 	dateStr := r.URL.Query().Get("date")
 	var targetDate time.Time
@@ -146,7 +146,7 @@ func GetWeeklyDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	email := r.Context().Value(UserEmailKey()).(string)
+	email := r.Context().Value(UserEmailKey).(string)
 
 	// Determine start of week (Monday)
 	startStr := r.URL.Query().Get("start")

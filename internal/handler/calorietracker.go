@@ -80,7 +80,7 @@ func LogCalories(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	email := r.Context().Value(UserEmailKey()).(string)
+	email := r.Context().Value(UserEmailKey).(string)
 
 	nutrition, err := fetchNutritionFromNutritionix(req.Description)
 	if err != nil {
@@ -116,7 +116,7 @@ func GetMeals(w http.ResponseWriter, r *http.Request) {
 		return
 	} //ykwitmeans
 
-	email := r.Context().Value(UserEmailKey()).(string) // jwt se user ki info nikali aur ab wahi dikhaenge jo user hai not kisi aur ka
+	email := r.Context().Value(UserEmailKey).(string) // jwt se user ki info nikali aur ab wahi dikhaenge jo user hai not kisi aur ka
 
 	rows, err := db.DB.Query(`
 		SELECT description, calories, protein, carbs, fat, created_at
@@ -163,7 +163,7 @@ func GetTodayMeals(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	email := r.Context().Value(UserEmailKey()).(string)
+	email := r.Context().Value(UserEmailKey).(string)
 
 	// time uthaya
 	now := time.Now()
